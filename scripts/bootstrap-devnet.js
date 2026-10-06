@@ -19,9 +19,6 @@ if (!process.env.SOLANA_TREASURY_SECRET_KEY) {
   console.log("Generated treasury secret key (store securely):", bs58.encode(treasury.secretKey));
 }
 
-const airdrop = await connection.requestAirdrop(treasury.publicKey, 2 * LAMPORTS_PER_SOL);
-await connection.confirmTransaction(airdrop, "confirmed");
-
 const mint = await createMint(connection, treasury, treasury.publicKey, null, 6);
 const treasuryAta = await getOrCreateAssociatedTokenAccount(
   connection,
