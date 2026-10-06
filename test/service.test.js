@@ -16,35 +16,23 @@ const valid = {
   settlement_date: "2026-10-25",
   currency: "BRL",
   total_cents: 39000,
-  items: [
-    {
-      item_id: "stl_test_001#emp_3",
-      employee_id: "3",
-      employee_name: "Test",
-      wallet_address: "11111111111111111111111111111111",
-      amount_cents: 39000
-    }
-  ]
+  items: [{
+    item_id: "stl_test_001#emp_3",
+    employee_id: "3",
+    employee_name: "Test",
+    wallet_address: "11111111111111111111111111111111",
+    amount_cents: 39000
+  }]
 };
 
 describe("settlement service contract", () => {
   let ledger;
-
-  beforeEach(() => {
-    ledger = makeLedger();
-  });
+  beforeEach(() => { ledger = makeLedger(); });
 
   it("rejects a mismatched total before processing", async () => {
-    const service = new SettlementService({
-      ledger,
-      rail: null,
-      webhookSecret: "x",
-      cluster: "devnet"
-    });
-
-    await expect(
-      service.create({ ...valid, total_cents: 39001 })
-    ).rejects.toMatchObject({ statusCode: 400 });
+    const service = new SettlementService({ ledger, rail: null, webhookSecret: "x", cluster: "devnet" });
+    await expect(service.create({ ...valid, total_cents: 39001 }))
+      .rejects.toMatchObject({ statusCode: 400 });
   });
 
   it("is idempotent by batch_id", async () => {
@@ -54,10 +42,8 @@ describe("settlement service contract", () => {
       webhookSecret: "x",
       cluster: "devnet"
     });
-
     const first = await service.create(valid);
     const second = await service.create(valid);
-
     expect(first.response.batch_id).toBe(valid.batch_id);
     expect(second.existing).toBe(true);
   });
@@ -68,16 +54,10 @@ describe("settlement service contract", () => {
         throw Object.assign(new Error("expired"), { code: "TX_EXPIRED" });
       }
     };
-
-    const service = new SettlementService({
-      ledger,
-      rail,
-      webhookSecret: "x",
-      cluster: "devnet"
-    });
+    const service = new SettlementService({ ledger, rail, webhookSecret: "x", cluster: "devnet" });
 
     await service.create(valid);
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await service.process(valid.batch_id);
 
     const batch = ledger.get(valid.batch_id);
     expect(batch.items[0].status).toBe("FAILED");
