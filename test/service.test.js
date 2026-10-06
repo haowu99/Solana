@@ -62,6 +62,40 @@ describe("settlement service contract", () => {
     expect(second.existing).toBe(true);
   });
 
+  it("coalesces concurrent creates for the same batch", async () => {
+    let writes = 0;
+    let release;
+    const gate = new Promise(resolve => {
+      release = resolve;
+    });
+
+    const data = new Map();
+    const concurrentLedger = {
+      get: id => data.get(id) || null,
+      set: async batch => {
+        writes += 1;
+        if (writes === 1) await gate;
+        data.set(batch.batchId, structuredClone(batch));
+      }
+    };
+
+    const service = new SettlementService({
+      ledger: concurrentLedger,
+      rail: { sendChunk: async () => { throw new Error("should not run in test"); } },
+      webhookSecret: "x",
+      cluster: "devnet"
+    });
+
+    const first = service.create(valid);
+    const second = service.create(valid);
+    release();
+
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.existing).toBe(false);
+    expect(b.existing).toBe(false);
+    expect(writes).toBe(1);
+  });
+
   it("preserves failed items for per-item retry", async () => {
     const rail = {
       sendChunk: async () => {
