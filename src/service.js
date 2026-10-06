@@ -117,12 +117,34 @@ export class SettlementService {
     this.rail = rail;
     this.webhookSecret = webhookSecret;
     this.cluster = cluster;
+    this.createLocks = new Map();
   }
 
   async create(body) {
     validateRequest(body);
+
     const existing = this.ledger.get(body.batch_id);
-    if (existing) return { accepted: true, existing: true, response: this.acceptedResponse(existing) };
+    if (existing) {
+      return { accepted: true, existing: true, response: this.acceptedResponse(existing) };
+    }
+
+    const inFlight = this.createLocks.get(body.batch_id);
+    if (inFlight) return inFlight;
+
+    const creation = this.createBatch(body);
+    this.createLocks.set(body.batch_id, creation);
+    try {
+      return await creation;
+    } finally {
+      this.createLocks.delete(body.batch_id);
+    }
+  }
+
+  async createBatch(body) {
+    const existing = this.ledger.get(body.batch_id);
+    if (existing) {
+      return { accepted: true, existing: true, response: this.acceptedResponse(existing) };
+    }
 
     const now = new Date().toISOString();
     const batch = {
